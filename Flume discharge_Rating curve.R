@@ -1,0 +1,67 @@
+#################################################################################################################################################
+# THIS CODE: (1) USES FLUME 'CRITICAL' DEPTH MEASUREMENTS FROM A PRESSURE SENSOR TO COMPUTE DISCHARGE; (2) BUILDS A RATING CURVE FROM MANUAL    #
+# STAGE MEASUREMENTS AT NOTUS BRIDGE (DO STATION #1); AND (3) COMPARES CALCULATED DISCHARGE VALUES TO WATERMASTERS' SEBREE CANAL DISCHARGE      #
+# MEASUREMENTS AT HEADGATE TO VALIDATE APPROPRIATE WATER LOSS DOWNSTREAM AT METABOLISM STUDY REACH FROM FIELD IRRIGATION                        #
+#################################################################################################################################################
+
+#####----- READ IN SEBREE CANAL 2022 DAILY DISCHARGE DATA FROM MEASUREMENTS AND INTERPOLATIONS AT HEADGATE -----#####
+
+Sebree_discharge <- read.csv("C:/Users/reedc/OneDrive/Documents/BSU/Thesis/Data/Sebree_discharge.csv", header = TRUE)
+
+
+#####----- SET DISCHARGE COLLECTION TIME TO 12:00 PM EACH DAY WITH POSIX FOR COMPARISONS WITH MODELED DISCHARGE -----#####
+
+Sebree_discharge$Diversion.Date <- paste(Sebree_discharge$Diversion.Date, "12:00", sep = " ") 
+Sebree_discharge$Diversion.Date <- as.POSIXct(Sebree_discharge$Diversion.Date, format="%m/%d/%Y %H:%M", tz = "America/Denver")
+
+
+#####----- SELECT DATE RANGE FROM METABOLISM STUDY AND REMOVED INTERPOLATED VALUES -----#####
+
+SD <- Sebree_discharge[119:292, ]
+SDM <- as.data.frame(split(SD, SD[ , 4])[2])
+
+
+#####----- PLOT TIME SERIES OF MEASURED AND FLUME CALCULATED (OFFSET BY 0.45 FT.) DISCHARGE VALUES FOR COMPARISON -----#####
+
+plot(SDM[ , 2], SDM[ , 3], pch = 19, col = 'red', ylim = c(0, 350), xlab = "Date-Time", ylab = "Discharge (cfs)")
+lines(campbell_pad[ , 1], 22 * sqrt(32.17405 * (campbell_pad[ , 4] - 0.45)^3))
+
+
+#####----- READ IN 'CHECK STAGE' VS. 'NOTUS BRIDGE STAGE' DATA AND CONVERT TIME TO POSIX -----#####
+
+stage <- read.csv(file = "C:/Users/reedc/OneDrive/Documents/BSU/Thesis/stage v stage.csv", header = TRUE)
+stage$'Thalweg (ft)' <- stage[ , 3] / 12
+
+stage$X <- as.POSIXct(stage$X, format = "%m/%d/%y %H:%M")
+
+
+#####----- MATCH TIMES BETWEEN MANUAL AND SENSOR MEASUREMENTS OF STAGE -----#####
+
+x <- stage[ , 1]
+
+y <- match(x, campbell_pad[ , 1])[1:4]
+z <- match(x, campbell[ , 1])[5:6]
+
+
+#####----- CREATE DATAFRAME WITH STAGE AND DISCHARGE MEASUREMENTS FOR RATING CURVE -----#####
+
+f <- data.frame(stage[ , 1], stage[ , 6], c(22 * sqrt(32.17405 * (campbell_pad[ , 4] - 0.45)^3)[y], 22 * sqrt(32.17405 * (campbell[ , 4] - 0.45)^	3)[z]))
+
+colnames(f) <- c("Date", "Depth (ft)", "Discharge (cfs)")
+
+
+#####----- (1) SELECT STAGE AND DISCHARGE, (2) CREATE A POWER FUNCTION RATING CURVE, AND (3) PLOT THE RELATIONSHIP -----#####
+
+y <- f[ , 2]
+x <- f[ , 3]
+
+fit5 <- lm(log(y) ~ log(x))
+m <- seq(0, 350, length.out = 1000)
+p5 <- exp(predict(fit5, newdata = data.frame(x = m)))
+plot(f[ , 3], f[ , 2], xlim = c(0, 350), ylim = c(0, 6), xlab = "Discharge (cfs)", ylab = "Stage (ft)", pch = 4, lwd = 3)
+lines(m, p5, col = "firebrick2", lwd = 2)
+
+
+#####----- STORE CALCULATED DISCHARGE MEASUREMENTS FOR FURTHER ANALYSES -----#####
+
+cfs <- 22 * sqrt(32.17405 * (campbell_pad[ , 4] - 0.45)^3)
