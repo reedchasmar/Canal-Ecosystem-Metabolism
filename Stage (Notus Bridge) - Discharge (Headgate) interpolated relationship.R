@@ -1,0 +1,44 @@
+################################################################################################################################################## THIS CODE: (1) READS IN DISCHARGE MEASUREMENTS AT SEBREE CANAL HEADGATE; (2) PADS AND INTERPOLATES TO 1-MIN INTERVALS TO ALIGN WITH           # # INTERPOLATED DEPTH DATA; AND (3) PLOTS THE STAGE-DISCHARGE RELATIONSHIP WITH A POWER FUNCTION RATING CURVE TO ASSESS THE NATURE OF THE        # # RELATIONSHIP.                                                                                                                                 #
+#################################################################################################################################################
+
+#####----- LOAD LIBRARIES TO PAD AND INTERPOLATE WATERMASTERS DISCHARGE MEASUREMENTS -----#####
+
+library("padr")
+library("imputeTS")
+
+
+#####----- READ IN 2022 DISCHARGE DATA FOR SEBREE HEADGATE FROM WATERMASTERS -----#####
+
+Sebree_discharge <- read.csv("C:/Users/reedc/OneDrive/Documents/BSU/Thesis/Data/Sebree_discharge.csv", header=TRUE)
+
+
+#####----- (1) APPEND TIME (12:00 PM) TO THE END OF DATE STRING; AND (2) CONVERT TO POSIXCT -----#####
+
+Sebree_discharge$Diversion.Date <- paste(Sebree_discharge$Diversion.Date, "12:00", sep = " ") 
+
+Sebree_discharge$Diversion.Date <- as.POSIXct(Sebree_discharge$Diversion.Date, format="%m/%d/%Y %H:%M", tz = "America/Denver")
+
+
+#####----- (1) PAD TIMESTEP TO 1-MINUTE INTERVALS; AND (2) LINEARLY INTERPOLATE -----#####
+
+Sebree_dpad <- pad(Sebree_discharge, interval = "min")
+
+Sebree_dpad <- na_interpolation(Sebree_dpad)
+
+
+#####----- CLIP DISCHARGE TIME SERIES TO ALIGN WITH CAMPBELL DEPTH MEASUREMENTS -----#####
+
+Sebree_dpad <- Sebree_dpad[170158:420321,]
+
+
+#####----- (1) SELECT STAGE (NOTUS BRIDGE) AND DISCHARGE (HEADGATE); (2) CREATE POWER FUNCTION RATING CURVE; AND (3) PLOT RELATIONSHIP -----#####
+
+x <- Sebree_dpad$Discharge
+y <- campbell_pad$"Depth_2 (in)"
+
+fit5 <- lm(log(y) ~ log(x))
+m <- seq(0, 350, length.out = 1000)
+p5 <- exp(predict(fit5, newdata = data.frame(x = m)))
+
+plot(Sebree_dpad$Discharge, campbell_pad$"Depth_2 (in)", xlim = c(0, 350), ylim = c(0, 70), xlab = "Discharge (cfs)", ylab = "Stage (ft)", pch = 	4, lwd = 3)
+lines(m, p5, col = "firebrick2", lwd = 2)
