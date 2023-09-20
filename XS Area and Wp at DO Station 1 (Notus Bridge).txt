@@ -1,0 +1,116 @@
+################################################################################################################################################## THIS CODE: (1) DETERMINES THE INTERSECTION POINTS BETWEEN THE WATER LEVEL AND THE CANAL CROSS-SECTION PERIMETER; AND (2) USES THESE POINTS TO #
+# CALCULATE THE CROSS-SECTIONAL AREA AND LENGTH OF WETTED PERIMETER AT EACH INTERPOLATED TIMESTEP (1-MIN)                                       #
+#################################################################################################################################################
+
+#####----- LOAD LIBRARIES -----#####
+
+library(geiger)
+library(sp)
+library(rgeos)
+
+
+#####----- CREATE VECTOR OF CHANNEL CROSS-SECTION DEPTHS AT EACH FOOT -----#####
+
+x <- seq(0, 47, 1)
+
+y <- c(0, 0.5, 3.5, 9, 15, 23, 31, 46, 58, 72, 76, 81, 84, 85, 85, 84, 84, 84, 84, 84, 83, 83, 82.5, 82, 82, 81, 81, 80, 79.5, 78.5, 78, 77, 77, 75, 74.5, 74, 73, 70.5, 66, 61.5, 53, 43, 31, 22, 16, 7, 3, 0)
+
+
+#####----- (1) USE ANGLE TO ACCOUNT FOR BANK HEIGHT DIFFERENCE; (2) LEVEL OUT DEPTHS OF CROSS SECTION; (3) CONVERT TO INCHES -----#####
+
+rad <- 0.03572
+
+z <- vector()
+for (i in 1:48)
+{
+z[i] <- sin(rad) * ((i - 1) * 12)
+}
+
+x_in <- x * 12
+y_adj <- (y + z) * -1
+
+
+#####----- STORE BRIDGE HEIGHT -----#####
+
+bridge <- -92 + 76
+
+
+#####----- CREATE MATRIX AND VECTORS TO STORE XS-AREA AND INTERSECTION POINTS BETWEEN WATER LEVEL AND CANAL CROSS-SECTION PERIMETER -----#####
+
+XS <- vector()
+x_pts <- matrix(0, 250164, 2)
+y_pts <- vector()
+
+
+#####----- CREATE A FOR LOOP THAT CALCULATES AND STORES INTERSECTION POINTS AND XS-AREA FOR EACH DEPTH MEASUREMENT (1-MIN TIMESTEP) -----#####
+
+for (i in 1:250164)
+{
+
+
+#####----- (1) STORE WATER LEVEL AS DEPTH BELOW LEFT BANK; (2) FIND POINTS WHERE WATER LEVEL IS ABOVE CANAL CROSS-SECTION PERIMETER -----#####
+
+w_lvl <- rep((-92 + campbell_pad[i, 9]), 48)
+
+above <- w_lvl > y_adj
+
+
+#####----- DETERMINE THE TRUE INDICES WHERE THE 1-UNIT LAGGED DIFFERENCE FOR 'ABOVE' LOGICAL OBJECT DOES NOT EQUAL ZERO -----#####
+
+intersect.points <- which(diff(above) != 0)
+
+
+#####----- FIND THE SLOPES OF LINE SEGMENTS FOR WATER LEVEL AND CANAL CROSS-SECTION PERIMETER -----#####
+
+w_lvl.slopes <- w_lvl[intersect.points + 1] - w_lvl[intersect.points]
+y_adj.slopes <- y_adj[intersect.points + 1] - y_adj[intersect.points]
+
+
+#####----- (1) FIND X&Y INTERSECTION POINTS BETWEEN THE LINE SEGMENTS; (2) STORE POINTS IN MATRIX AND VECTOR -----#####
+
+x.points <- (intersect.points + ((y_adj[intersect.points] - w_lvl[intersect.points]) / (w_lvl.slopes - y_adj.slopes)) - 1) * 12
+y.points <- w_lvl[intersect.points] + (w_lvl.slopes * (x.points - intersect.points))
+
+x_pts[i, 1] <- x.points[1]
+x_pts[i, 2] <- x.points[2]
+y_pts[i] <- y.points[1]
+
+
+#####----- (1) CALCULATE AND STORE CROSS-SECTIONAL AREA AT EACH TIME STEP; (2) CLOSE FOR LOOP -----#####
+
+XS[i] <- geiger:::.area.between.curves(x_in, y_adj, w_lvl, xrange = x.points) / 144
+
+}
+
+
+#####----- PLOT CANAL CROSS-SECTION WITH WATER LEVEL POLYGON -----#####
+
+plot(x_in, y_adj, type = "l", asp = 1, col = 'sienna3', lwd = 3, xlab = "Transect (in)", ylab = "Depth below left bank (in)")
+segments(x.points[1], w_lvl, x.points[2], w_lvl, col='paleturquoise4', lwd = 2)
+polygon(c(x.points[1], x.points[2], rev(x_in[between(x_in, x.points[1], x.points[2])]), x.points[1]), c(w_lvl[1], w_lvl[1], 	rev(y_adj[between(x_in, x.points[1], x.points[2])]), w_lvl[1]), col = 'paleturquoise4', border = NA)
+lines(x_in, y_adj, asp = 1, col = 'sienna3', lwd = 3)
+
+
+#####----- CALCULATE AND STORE WETTED PERIMETER AT EACH TIME STEP -----#####
+
+Wp <- vector()
+
+for (i in 1:250164)
+{
+w_lvl <- rep((-92 + campbell_pad[i, 6]), 48)
+x <- c(x_pts[i, 2], rev(x_in[between(x_in, x_pts[i, 1], x_pts[i, 2])]), x_pts[i, 1])
+y <- c(w_lvl[1], rev(y_adj[between(x_in, x_pts[i, 1], x_pts[i, 2])]), w_lvl[1])
+xy <- cbind(x, y)
+xy.sp = sp::SpatialPoints(xy)
+spl <- SpatialLines(list(Lines(Line(xy.sp), ID = "a")))
+Wp[i] <- gLength(spl)
+}
+
+Wp_ft <- Wp / 12
+
+
+#####----- CALCULATE HYDRAULIC RADIUS -----#####
+
+Rh <- XS / Wp_ft
+
+

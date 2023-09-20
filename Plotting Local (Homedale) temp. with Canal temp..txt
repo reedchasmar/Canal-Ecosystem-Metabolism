@@ -1,0 +1,50 @@
+################################################################################################################################################## THIS CODE READS IN DATA FROM A WEATHER STATION (HOMEDALE) CLOSE TO THE CANAL SENSORS AND PLOTS THE MAXIMUM AND MINIMUM AIR AND WATER          #  # TEMPERATURES EACH DAY FOR THE DURATION OF THE GROWING SEASON                                                                                  #
+#################################################################################################################################################
+
+#####----- READ IN METEOROLOGICAL DATA FROM LOCAL STATION (HOMEDALE); AND FORMAT DATES FOR WEATHER AND CANAL STATIONS -----##### 
+
+homedale <- read.csv(file = "C:/Users/reedc/OneDrive/Documents/BSU/Thesis/Data/HOMEDALE 1 SE, ID US.csv", header = TRUE)
+
+homedale$'Date' <- as.Date(homedale$'Date')
+Iverson$'Date' <- as.Date(Iverson$'MDT', tz = "America/Denver")
+
+
+#####----- (1) SPLIT CANAL SENSOR DATA BY DATE; AND (2) STORE THE MAXIMUM AND MINIMUM WATER TEMPERATURES IN TWO LISTS -----#####
+
+#- (1) -#
+o <- split(Iverson, Iverson$'Date')
+
+#- (2) -#
+w <- list()
+p <- list()
+
+for (i in 1:175)
+{
+a <- o[[i]]
+w[[i]] <- max(a[,2])
+p[[i]] <- min(a[,2])
+}
+
+
+#####----- ADD THE MAXIMUM AND MINIMUM WATER TEMPERATURE VALUES TO THE HOMEDALE DATAFRAME AND REMOVE UNNECESSARY COLUMN -----#####
+
+homedale <- data.frame(homedale, unlist(w), unlist(p))[,-c(2)]
+
+
+#####----- CREATE VECTORS OF ASCENDING TO DESCENDING DATE, AIR AND WATER TEMPERATURE; AND CONVERT AIR TEMPERATURE TO CELCIUS -----#####
+
+x <- c(homedale[,1], rev(homedale[,1]))
+y <- c((homedale[,3] - 32) * 5/9, rev((homedale[,2] - 32) * 5/9))
+y2 <- c(homedale[,8], rev(homedale[,7]))
+
+
+#####----- PLOT POLYGONS OF MAXIMUM AND MINIMUM TEMPERATURES FOR AIR AND WATER DURING GROWING SEASON -----#####
+
+plot(x, y, type = 'l', las = 1)
+polygon(x, y, col = "#65BFFF")
+polygon(x, y2, col = "plum2")
+
+
+
+
+
